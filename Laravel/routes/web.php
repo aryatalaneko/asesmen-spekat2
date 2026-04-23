@@ -6,6 +6,7 @@ use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AdminSubjectController;
 use App\Http\Controllers\AdminClassController;
 use App\Http\Controllers\AdminMappingController;
+use App\Http\Controllers\AdminDataMaintenanceController;
 use App\Http\Controllers\QuestionController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ReportController;
@@ -50,6 +51,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/users/template',           [AdminUserController::class, 'downloadTemplate'])->name('admin.users.template');
     Route::get('/admin/cetak-kartu',              [AdminUserController::class, 'printCards'])->name('admin.print-cards');
     Route::post('/admin/users/bulk-delete',       [AdminUserController::class, 'bulkDelete'])->name('admin.users.bulk-delete');
+    Route::get('/admin/data/backup',              [AdminDataMaintenanceController::class, 'backup'])->name('admin.data.backup');
+    Route::post('/admin/data/restore',            [AdminDataMaintenanceController::class, 'restore'])->name('admin.data.restore');
+    Route::post('/admin/data/clear',              [AdminDataMaintenanceController::class, 'clear'])->name('admin.data.clear');
 
     Route::get('/admin/subjects',              [AdminSubjectController::class, 'index'])->name('admin.subjects.index');
     Route::post('/admin/subjects',             [AdminSubjectController::class, 'store'])->name('admin.subjects.store');

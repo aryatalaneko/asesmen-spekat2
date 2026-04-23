@@ -17,6 +17,51 @@
     </div>
 @endif
 
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
+    <div class="card" style="border:1px solid #bfdbfe;background:#eff6ff;">
+        <h3 style="font-weight:800;font-size:1rem;color:#1e3a8a;margin-bottom:0.5rem;">Backup dan Restore Data</h3>
+        <p style="font-size:0.85rem;color:#334155;line-height:1.6;margin-bottom:1rem;">
+            Backup menyimpan data dinamis sistem: guru, siswa, kelas, mapel, penugasan, soal, jadwal, hasil, jawaban, izin ujian, dan clustering.
+            Akun admin dan tabel sistem Laravel tidak ikut diubah.
+        </p>
+
+        <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
+            <a href="{{ route('admin.data.backup') }}" class="btn btn-primary" style="text-decoration:none;">Unduh Backup JSON</a>
+        </div>
+
+        <form method="POST" action="{{ route('admin.data.restore') }}" enctype="multipart/form-data" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-start;">
+            @csrf
+            <div style="flex:1;min-width:260px;">
+                <input type="file" name="backup_file" accept=".json,application/json" class="form-control" required>
+                @error('backup_file')
+                    <p style="color:#b91c1c;font-size:0.8rem;margin-top:0.4rem;">{{ $message }}</p>
+                @enderror
+            </div>
+            <button type="submit" class="btn" style="background:#0f766e;color:white;">Restore Data</button>
+        </form>
+    </div>
+
+    <div class="card" style="border:1px solid #fecaca;background:#fff1f2;">
+        <h3 style="font-weight:800;font-size:1rem;color:#991b1b;margin-bottom:0.5rem;">Kosongkan Semua Data Dinamis</h3>
+        <p style="font-size:0.85rem;color:#4b5563;line-height:1.6;margin-bottom:1rem;">
+            Aksi ini akan menghapus seluruh data operasional yang diinput pengguna.
+            Akun admin akan tetap dipertahankan agar Anda tidak kehilangan akses ke sistem.
+        </p>
+
+        <form method="POST" action="{{ route('admin.data.clear') }}" onsubmit="return confirmClearData()">
+            @csrf
+            <div class="input-group" style="margin-bottom:0.75rem;">
+                <label class="input-label">Ketik <strong>KOSONGKAN DATA</strong> untuk konfirmasi</label>
+                <input type="text" name="confirmation_text" id="confirmation_text" class="form-control" placeholder="KOSONGKAN DATA" required>
+                @error('confirmation_text')
+                    <p style="color:#b91c1c;font-size:0.8rem;margin-top:0.4rem;">{{ $message }}</p>
+                @enderror
+            </div>
+            <button type="submit" class="btn btn-danger">Kosongkan Data</button>
+        </form>
+    </div>
+</div>
+
 {{-- Tampilkan detail import dihapus (silent bypass pada back-end) --}}
 {{-- ===== BULK IMPORT EXCEL ===== --}}
 <div style="background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;color:white;">
@@ -419,6 +464,16 @@ function submitBulkSiswa() {
     });
     form.submit();
 }
+
+function confirmClearData() {
+    const value = document.getElementById('confirmation_text')?.value?.trim();
+
+    if (value !== 'KOSONGKAN DATA') {
+        alert('Konfirmasi tidak cocok. Ketik tepat: KOSONGKAN DATA');
+        return false;
+    }
+
+    return confirm('Semua data dinamis akan dihapus. Backup data terlebih dahulu jika masih dibutuhkan. Lanjutkan?');
+}
 </script>
 @endsection
-
