@@ -576,6 +576,8 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    const currentUserId = {{ auth()->id() }};
+
     window.Echo.channel('exam.{{ $schedule->id }}')
         .listen('.ExamStateChanged', (e) => {
             console.log('[Reverb] Event diterima:', e);
@@ -598,6 +600,26 @@ document.addEventListener('DOMContentLoaded', function () {
                         }
                     }
                 });
+            } else if (e.action === 'permission_changed') {
+                if ((e.payload?.user_id ?? null) !== currentUserId) return;
+
+                const banner = document.getElementById('realtimeBanner');
+
+                if (e.payload?.allowed) {
+                    if (banner) {
+                        banner.textContent = 'Akses ujian Anda diaktifkan kembali oleh guru.';
+                        banner.style.display = 'block';
+                        setTimeout(() => banner.style.display = 'none', 4000);
+                    }
+                    return;
+                }
+
+                if (banner) {
+                    banner.textContent = 'Akses ujian dicabut oleh guru. Jawaban akan langsung dikumpulkan.';
+                    banner.style.display = 'block';
+                }
+
+                timerSeconds = 0;
             } else if (e.action === 'deactivated' || e.action === 'expired') {
                 // Waktu habis atau ujian dihentikan paksa → set timer ke 0
                 // setInterval di startTimer() akan catch timerSeconds <= 0 dan auto-submit
@@ -614,4 +636,3 @@ document.addEventListener('DOMContentLoaded', function () {
 </div>
 
 @endsection
-

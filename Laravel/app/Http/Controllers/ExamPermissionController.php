@@ -25,6 +25,20 @@ class ExamPermissionController extends Controller
         // Toggle
         $perm->update(['allowed' => !$perm->allowed]);
 
+        try {
+            broadcast(new ExamStateChanged(
+                $schedule->id,
+                'permission_changed',
+                [
+                    'user_id' => $student->id,
+                    'allowed' => (bool) $perm->allowed,
+                    'is_active' => (bool) $schedule->is_active,
+                ]
+            ))->toOthers();
+        } catch (\Throwable $e) {
+            \Log::warning('Reverb broadcast gagal (permission toggle): ' . $e->getMessage());
+        }
+
         return back()->with('success', 
             $perm->allowed 
                 ? "{$student->name} diizinkan mengikuti ujian." 
