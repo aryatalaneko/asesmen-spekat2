@@ -18,11 +18,11 @@ class QuestionTemplateExport implements FromArray, WithHeadings, WithStyles, Wit
     {
         return [
             // Contoh soal PG SMP (Opsi_E dikosongkan)
-            ['pg',    10, 'Contoh PG SMP: Ibu kota Indonesia adalah?',      'Jakarta', 'Bandung', 'Surabaya', 'Medan',   '',         'a'],
+            ['pg',    2.5, 'Contoh PG SMP: Ibu kota Indonesia adalah?',      'Jakarta', 'Bandung', 'Surabaya', 'Medan',   '',         'a'],
             // Contoh soal PG SMA (Opsi_E diisi)
-            ['pg',    10, 'Contoh PG SMA: Planet terdekat dari Matahari?',  'Venus',   'Bumi',    'Mars',     'Merkurius','Saturnus', 'd'],
+            ['pg',    3.5, 'Contoh PG SMA: Planet terdekat dari Matahari?',  'Venus',   'Bumi',    'Mars',     'Merkurius','Saturnus', 'd'],
             // Contoh soal Essay
-            ['essay', 10, 'Contoh Essay: Jelaskan makna Pancasila!',         '',        '',        '',         '',         '',        'Pancasila adalah dasar negara Indonesia yang terdiri dari 5 sila.'],
+            ['essay', 4.0, 'Contoh Essay: Jelaskan makna Pancasila!',         '',        '',        '',         '',         '',        'Pancasila adalah dasar negara Indonesia yang terdiri dari 5 sila.'],
         ];
     }
 

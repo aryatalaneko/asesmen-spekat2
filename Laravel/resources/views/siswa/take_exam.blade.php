@@ -240,6 +240,46 @@ let flagged = {};    // { index: true/false }
 // Sisa waktu tersinkronisasi dengan waktu aktivasi guru
 let timerSeconds = {{ (int) $remainingSeconds }};
 const scheduleId = {{ $schedule->id }};
+const statusEndpoint = '{{ route('siswa.exams.status', $schedule->id) }}';
+let examSubmitted = false;
+let lastRealtimeStatus = '';
+
+function showRealtimeBanner(message) {
+    const banner = document.getElementById('realtimeBanner');
+    if (!banner) return;
+
+    banner.textContent = message;
+    banner.style.display = 'block';
+    clearTimeout(showRealtimeBanner.timeoutId);
+    showRealtimeBanner.timeoutId = setTimeout(() => {
+        banner.style.display = 'none';
+    }, 4000);
+}
+
+function sendRealtimeStatus(status, message, options = {}) {
+    if (examSubmitted && status !== 'submitted') return Promise.resolve();
+
+    const key = `${status}:${message || ''}`;
+    if (!options.force && lastRealtimeStatus === key) {
+        return Promise.resolve();
+    }
+
+    lastRealtimeStatus = key;
+
+    return fetch(statusEndpoint, {
+        method: 'POST',
+        headers: {
+            'X-CSRF-TOKEN': '{{ csrf_token() }}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ status, message }),
+        keepalive: Boolean(options.keepalive),
+    }).catch((error) => {
+        console.warn('Gagal mengirim status realtime:', error);
+    });
+}
 
 // ---- RENDER QUESTION ----
 function renderQuestion(index) {
@@ -518,6 +558,9 @@ function closeModal() {
 }
 
 function submitExam() {
+    examSubmitted = true;
+    sendRealtimeStatus('submitted', 'Jawaban sedang dikirim.', { force: true, keepalive: true });
+
     // Build hidden answer inputs
     const container = document.getElementById('hiddenAnswers');
     container.innerHTML = '';
@@ -568,6 +611,26 @@ function startTimer() {
 // ---- INIT ----
 renderQuestion(0);
 startTimer();
+
+document.addEventListener('DOMContentLoaded', function () {
+    sendRealtimeStatus('working', 'Membuka room ujian dan mulai mengerjakan.', { force: true });
+
+    document.addEventListener('visibilitychange', function () {
+        if (examSubmitted) return;
+
+        if (document.hidden) {
+            sendRealtimeStatus('tab_hidden', 'Berpindah tab atau meminimalkan browser.');
+            return;
+        }
+
+        sendRealtimeStatus('working', 'Kembali fokus dan sedang mengerjakan.');
+    });
+
+    window.addEventListener('beforeunload', function () {
+        if (examSubmitted) return;
+        sendRealtimeStatus('left_page', 'Meninggalkan halaman ujian.', { force: true, keepalive: true });
+    });
+});
 
 // ---- WEBSOCKETS REAL-TIME LISTENER ----
 document.addEventListener('DOMContentLoaded', function () {

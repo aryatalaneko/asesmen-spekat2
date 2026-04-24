@@ -2,13 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use App\Models\User;
+use App\Imports\StudentImport;
 use App\Models\ClassRoom;
 use App\Models\Subject;
 use App\Models\TeacherClass;
-use App\Imports\StudentImport;
+use App\Models\User;
+use App\Services\StudentCredentialService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -26,19 +27,36 @@ class AdminUserController extends Controller
         return view('admin.users', compact('gurus', 'siswas', 'classes', 'subjects', 'title'));
     }
 
-    public function store(Request $request)
+    public function store(Request $request, StudentCredentialService $credentialService)
     {
         $request->validate([
             'name'     => 'required|string|max:100',
-            'password' => 'required|string|min:6',
             'role'     => 'required|in:guru,siswa',
-            
-            // Validation for Siswa
-            'class_id' => 'nullable|exists:classes,id',
-
-            // Validation for Guru mappings
+            'password' => $request->input('role') === 'guru' ? 'required|string|min:6' : 'nullable|string|min:6',
+            'nis'      => $request->input('role') === 'siswa' ? 'required|string|max:50' : 'nullable|string|max:50',
+            'class_id' => $request->input('role') === 'siswa' ? 'required|exists:classes,id' : 'nullable|exists:classes,id',
             'mappings' => 'nullable|array',
         ]);
+
+        if ($request->role === 'siswa') {
+            $user = User::where('role', 'siswa')
+                ->where('nis', $request->nis)
+                ->first();
+
+            $user ??= new User();
+            $user->name = $request->name;
+            $user->nis = $request->nis;
+            $user->email = $credentialService->buildStudentEmail($request->nis);
+            $user->role = 'siswa';
+            $user->class_id = $request->class_id;
+            $credentialService->syncCredentials($user);
+            $user->save();
+
+            return back()->with(
+                'success',
+                'Akun siswa berhasil disimpan. Username ujian dan password dibuat otomatis, lalu dapat dicetak lewat kartu peserta.'
+            );
+        }
 
         $user = User::where('name', $request->name)->where('role', $request->role)->first();
 
@@ -110,7 +128,7 @@ class AdminUserController extends Controller
      * Import siswa dari file Excel.
      * Format kolom: Nama | NIS | Kelas
      */
-    public function import(Request $request)
+    public function import(Request $request, StudentCredentialService $credentialService)
     {
         $request->validate([
             'excel_file' => 'required|file|mimes:xlsx,xls,csv|max:5120', // Maks 5MB
@@ -121,10 +139,46 @@ class AdminUserController extends Controller
         ]);
 
         try {
-            $import = new StudentImport();
+            $import = new StudentImport($credentialService);
             Excel::import($import, $request->file('excel_file'));
+            $summary = $import->summary();
 
-            return back()->with('success', 'Import siswa dari Excel berhasil diselesaikan!');
+            if (($summary['imported'] ?? 0) === 0) {
+                $details = [];
+
+                if (($summary['skipped_example'] ?? 0) > 0) {
+                    $details[] = $summary['skipped_example'] . ' baris contoh template diabaikan';
+                }
+
+                if (($summary['skipped_incomplete'] ?? 0) > 0) {
+                    $details[] = $summary['skipped_incomplete'] . ' baris kosong/tidak lengkap diabaikan';
+                }
+
+                $suffix = !empty($details) ? ' Detail: ' . implode(', ', $details) . '.' : '';
+
+                return back()->with(
+                    'error',
+                    'Import tidak menghasilkan data siswa baru. Pastikan kolom Nama, NIS, dan Kelas terisi dengan benar.' . $suffix
+                );
+            }
+
+            $messages = [
+                "Import siswa selesai: {$summary['created']} data baru, {$summary['updated']} data diperbarui.",
+            ];
+
+            if (!empty($summary['created_classes'])) {
+                $messages[] = 'Kelas baru dibuat otomatis: ' . implode(', ', $summary['created_classes']) . '.';
+            }
+
+            if (($summary['skipped_example'] ?? 0) > 0) {
+                $messages[] = $summary['skipped_example'] . ' baris contoh template diabaikan.';
+            }
+
+            if (($summary['skipped_incomplete'] ?? 0) > 0) {
+                $messages[] = $summary['skipped_incomplete'] . ' baris kosong/tidak lengkap diabaikan.';
+            }
+
+            return back()->with('success', implode(' ', $messages));
 
         } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
             $failures = $e->failures();
@@ -177,7 +231,7 @@ class AdminUserController extends Controller
         $sheet->setCellValue('A4', '⚠ Catatan:');
         $sheet->setCellValue('A5', '- Hapus baris contoh sebelum import.');
         $sheet->setCellValue('A6', '- Kolom "Kelas" harus sama persis dengan nama kelas di sistem (contoh: IX-A, VIII-B).');
-        $sheet->setCellValue('A7', '- NIS akan dijadikan password login siswa.');
+        $sheet->setCellValue('A7', '- Username ujian dan password login akan digenerate otomatis oleh sistem.');
         $sheet->mergeCells('A4:C4');
         $sheet->mergeCells('A5:C5');
         $sheet->mergeCells('A6:C6');
@@ -197,14 +251,18 @@ class AdminUserController extends Controller
     /**
      * Cetak Kartu Peserta Ujian (ID Card) untuk semua siswa.
      */
-    public function printCards()
+    public function printCards(StudentCredentialService $credentialService)
     {
         $students = User::where('role', 'siswa')
             ->with('classRoom')
+            ->orderBy('class_id')
             ->orderBy('name')
             ->get();
+        $credentialService->backfillStudents($students);
 
-        return view('admin.print-cards', compact('students'), [
+        $classes = ClassRoom::orderBy('name')->get();
+
+        return view('admin.print-cards', compact('students', 'classes'), [
             'title' => 'Cetak Kartu Peserta'
         ]);
     }

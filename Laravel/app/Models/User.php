@@ -11,11 +11,11 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     protected $fillable = [
-        'name', 'nis', 'email', 'password', 'role', 'class_id',
+        'name', 'nis', 'exam_username', 'email', 'password', 'exam_password_plain', 'role', 'class_id',
     ];
 
     protected $hidden = [
-        'password', 'remember_token',
+        'password', 'remember_token', 'exam_password_plain',
     ];
 
     protected function casts(): array
@@ -23,6 +23,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
+            'exam_password_plain' => 'encrypted',
         ];
     }
 

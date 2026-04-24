@@ -82,12 +82,17 @@ class QuestionImport implements ToCollection, WithStartRow, WithCustomCsvSetting
                 continue;
             }
 
+            $normalizedWeight = $this->normalizeWeight($bobot);
+            if ($normalizedWeight === null) {
+                continue;
+            }
+
             $data = [
                 'subject_id'    => $this->subjectId,
                 'class_id'      => $this->classId,
                 'user_id'       => Auth::id(),
                 'type'          => $type,
-                'weight'        => (int) $bobot,
+                'weight'        => $normalizedWeight,
                 'question_text' => $pertanyaan,
             ];
 
@@ -115,5 +120,16 @@ class QuestionImport implements ToCollection, WithStartRow, WithCustomCsvSetting
 
             Question::create($data);
         }
+    }
+
+    private function normalizeWeight(string $weight): ?float
+    {
+        $normalized = str_replace(',', '.', trim($weight));
+
+        if ($normalized === '' || !is_numeric($normalized)) {
+            return null;
+        }
+
+        return (float) $normalized;
     }
 }

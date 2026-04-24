@@ -10,10 +10,11 @@ use App\Models\User;
 use App\Models\ExamPermission;
 use Illuminate\Support\Facades\Auth;
 use App\Events\ExamStateChanged;
+use App\Services\ExamMonitoringStatusService;
 
 class ScheduleController extends Controller
 {
-    public function index()
+    public function index(ExamMonitoringStatusService $monitoringStatuses)
     {
         $assignedClassIds = Auth::user()->teacherClasses()->pluck('class_id')->unique();
 
@@ -21,7 +22,7 @@ class ScheduleController extends Controller
             ->whereIn('class_id', $assignedClassIds)
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function ($s) {
+            ->map(function ($s) use ($monitoringStatuses) {
                 // Daftar siswa di kelas ini
                 $students = User::where('role', 'siswa')->where('class_id', $s->class_id)->get();
                 $s->students_list = $students;
@@ -30,9 +31,22 @@ class ScheduleController extends Controller
 
                 // Buat lookup: user_id → allowed (default true jika belum ada record)
                 $perms = $s->examPermissions->keyBy('user_id');
+                $cachedStatuses = $monitoringStatuses->getScheduleStatuses($s->id);
                 $s->permissions_map = $students->mapWithKeys(function ($student) use ($perms) {
                     $perm = $perms->get($student->id);
                     return [$student->id => $perm ? $perm->allowed : true];
+                });
+                $s->monitoring_statuses_map = $students->mapWithKeys(function ($student) use ($s, $cachedStatuses, $monitoringStatuses) {
+                    $isAllowed = $s->permissions_map[$student->id] ?? true;
+                    $isDone = $s->results->where('user_id', $student->id)->isNotEmpty();
+
+                    return [$student->id => $monitoringStatuses->resolveDisplayStatus(
+                        $student->id,
+                        $student->name,
+                        $isDone,
+                        $isAllowed,
+                        $cachedStatuses[$student->id] ?? null
+                    )];
                 });
 
                 // Hitung sisa detik ujian jika sedang aktif

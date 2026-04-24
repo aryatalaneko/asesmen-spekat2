@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use App\Events\ExamStateChanged;
 use App\Models\Schedule;
 use App\Models\Question;
 use App\Models\Result;
+use App\Services\ExamMonitoringStatusService;
 
 class ExamController extends Controller
 {
@@ -32,7 +34,7 @@ class ExamController extends Controller
     }
 
     // Halaman pengerjaan ujian
-    public function take($id)
+    public function take($id, ExamMonitoringStatusService $monitoringStatuses)
     {
         $schedule = Schedule::with('subject')->findOrFail($id);
         $siswa    = Auth::user();
@@ -84,13 +86,22 @@ class ExamController extends Controller
                 ->with('error', 'Tidak ada soal untuk ujian ini.');
         }
 
+        $statusPayload = $monitoringStatuses->putStatus(
+            $schedule->id,
+            $siswa->id,
+            $siswa->name,
+            'working',
+            ['message' => 'Membuka room ujian dan mulai mengerjakan.']
+        );
+        $this->broadcastStudentStatus($schedule->id, $statusPayload);
+
         return view('siswa.take_exam', compact('schedule', 'questions', 'remainingSeconds'), [
             'title' => 'Pengerjaan Ujian'
         ]);
     }
 
     // Submit dan koreksi otomatis
-    public function submit(Request $request, $id)
+    public function submit(Request $request, $id, ExamMonitoringStatusService $monitoringStatuses)
     {
         $schedule = Schedule::findOrFail($id);
         $siswa    = Auth::user();
@@ -259,7 +270,83 @@ class ExamController extends Controller
 
         \Illuminate\Support\Facades\DB::table('student_answers')->insert($studentAnswersData);
 
+        $statusPayload = $monitoringStatuses->putStatus(
+            $schedule->id,
+            $siswa->id,
+            $siswa->name,
+            'submitted',
+            [
+                'message' => 'Jawaban telah dikumpulkan.',
+                'result_recorded' => true,
+            ]
+        );
+        $this->broadcastStudentStatus($schedule->id, $statusPayload);
+
         return redirect()->route('siswa.results.show', $result->id);
+    }
+
+    public function updateRealtimeStatus(Request $request, $id, ExamMonitoringStatusService $monitoringStatuses)
+    {
+        $request->validate([
+            'status' => 'required|in:working,tab_hidden,left_page,submitted',
+            'message' => 'nullable|string|max:160',
+        ]);
+
+        $schedule = Schedule::findOrFail($id);
+        $siswa = Auth::user();
+
+        if ((int) $schedule->class_id !== (int) $siswa->class_id) {
+            abort(403);
+        }
+
+        $hasSubmitted = Result::where('schedule_id', $schedule->id)
+            ->where('user_id', $siswa->id)
+            ->exists();
+
+        if ($hasSubmitted && $request->status !== 'submitted') {
+            return response()->json([
+                'status' => 'ignored',
+                'data' => $monitoringStatuses->resolveDisplayStatus(
+                    $siswa->id,
+                    $siswa->name,
+                    true,
+                    true,
+                    $monitoringStatuses->getStudentStatus($schedule->id, $siswa->id)
+                ),
+            ]);
+        }
+
+        $permission = \App\Models\ExamPermission::where('schedule_id', $schedule->id)
+            ->where('user_id', $siswa->id)
+            ->first();
+
+        if ($permission && !$permission->allowed) {
+            $statusPayload = $monitoringStatuses->putStatus(
+                $schedule->id,
+                $siswa->id,
+                $siswa->name,
+                'access_revoked',
+                [
+                    'message' => 'Akses ujian dicabut oleh guru.',
+                    'allowed' => false,
+                ]
+            );
+            $this->broadcastStudentStatus($schedule->id, $statusPayload);
+
+            return response()->json(['status' => 'blocked', 'data' => $statusPayload], 403);
+        }
+
+        $statusPayload = $monitoringStatuses->putStatus(
+            $schedule->id,
+            $siswa->id,
+            $siswa->name,
+            $request->status,
+            ['message' => $request->message]
+        );
+
+        $this->broadcastStudentStatus($schedule->id, $statusPayload);
+
+        return response()->json(['status' => 'ok', 'data' => $statusPayload]);
     }
 
     // Scoring essay via cURL ke Python Flask
@@ -286,5 +373,18 @@ class ExamController extends Controller
 
         // Fallback: jika Flask tidak tersedia, nilai 0
         return 0.0;
+    }
+
+    private function broadcastStudentStatus(int $scheduleId, array $statusPayload): void
+    {
+        try {
+            broadcast(new ExamStateChanged(
+                $scheduleId,
+                'student_status_changed',
+                $statusPayload
+            ))->toOthers();
+        } catch (\Throwable $e) {
+            \Log::warning('Reverb broadcast gagal (student status update): ' . $e->getMessage());
+        }
     }
 }

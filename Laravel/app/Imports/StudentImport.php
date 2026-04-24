@@ -2,18 +2,31 @@
 
 namespace App\Imports;
 
-use App\Models\User;
 use App\Models\ClassRoom;
-use Illuminate\Support\Facades\Hash;
+use App\Models\User;
+use App\Services\StudentCredentialService;
+use Illuminate\Support\Str;
+use Maatwebsite\Excel\Concerns\SkipsErrors;
+use Maatwebsite\Excel\Concerns\SkipsOnError;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
-use Maatwebsite\Excel\Concerns\WithValidation;
-use Maatwebsite\Excel\Concerns\SkipsOnError;
-use Maatwebsite\Excel\Concerns\SkipsErrors;
 
 class StudentImport implements ToModel, WithHeadingRow, SkipsOnError
 {
     use SkipsErrors;
+
+    public function __construct(
+        private readonly ?StudentCredentialService $credentialService = null,
+    ) {
+    }
+
+    private int $createdCount = 0;
+    private int $updatedCount = 0;
+    private int $skippedIncompleteCount = 0;
+    private int $skippedExampleCount = 0;
+
+    /** @var array<string, bool> */
+    private array $createdClasses = [];
 
     /**
      * Mapping setiap baris Excel ke model User.
@@ -26,37 +39,87 @@ class StudentImport implements ToModel, WithHeadingRow, SkipsOnError
      */
     public function model(array $row)
     {
-        // ── 1. Validasi kolom wajib tidak kosong ──────────────────────
-        $nama  = trim($row['nama']  ?? '');
-        $nis   = trim((string)($row['nis']   ?? ''));
-        $kelas = trim($row['kelas'] ?? '');
+        $nama = $this->normalizeCell($row['nama'] ?? '');
+        $nis = $this->normalizeCell($row['nis'] ?? '');
+        $kelas = $this->normalizeCell($row['kelas'] ?? '');
 
-        if (empty($nama) || empty($nis) || empty($kelas)) {
-            return null; // Silently ignore
+        if ($this->isExampleRow($nama, $nis, $kelas)) {
+            $this->skippedExampleCount++;
+            return null;
         }
 
-        // ── 2. Cari ID Kelas berdasarkan nama kelas ───────────────────
-        // Pencarian tidak case-sensitive dan toleran terhadap spasi
-        $classRoom = ClassRoom::whereRaw('LOWER(TRIM(name)) = ?', [strtolower($kelas)])->first();
+        if ($nama === '' || $nis === '' || $kelas === '') {
+            $this->skippedIncompleteCount++;
+            return null;
+        }
+
+        $classRoom = ClassRoom::whereRaw('LOWER(TRIM(name)) = ?', [Str::lower($kelas)])->first();
 
         if (!$classRoom) {
-            return null; // Silently ignore if class not found
+            $classRoom = ClassRoom::create([
+                'name' => $kelas,
+                'level' => $this->extractLevel($kelas),
+            ]);
+
+            $this->createdClasses[$classRoom->name] = true;
         }
 
-        // ── 3. Buat email unik dari nama + NIS ────────────────────────
-        $emailBase = strtolower(str_replace(' ', '.', $nama));
-        $email     = $emailBase . '.' . $nis . '@stjohanis.edu';
+        $credentialService = $this->credentialService ?? app(StudentCredentialService::class);
+        $email = $credentialService->buildStudentEmail($nis);
+        $legacyEmail = Str::slug($nama, '.') . '.' . $nis . '@stjohanis.edu';
 
-        // ── 4. Simpan atau update siswa (berdasarkan NIS unik) ─────────
-        // NIS dijadikan password → di-hash dengan bcrypt
-        $user = User::firstOrNew(['email' => $email]);
+        $user = User::query()
+            ->where('nis', $nis)
+            ->orWhere('email', $email)
+            ->orWhere('email', $legacyEmail)
+            ->first();
 
-        $user->name     = $nama;
-        $user->email    = $email;
-        $user->password = Hash::make($nis); // NIS sebagai password (ter-hash)
-        $user->role     = 'siswa';
+        $isNewUser = !$user;
+        $user ??= new User();
+
+        $user->name = $nama;
+        $user->nis = $nis;
+        $user->email = $email;
+        $user->role = 'siswa';
         $user->class_id = $classRoom->id;
+        $credentialService->syncCredentials($user);
+
+        if ($isNewUser) {
+            $this->createdCount++;
+        } else {
+            $this->updatedCount++;
+        }
 
         return $user;
+    }
+
+    public function summary(): array
+    {
+        return [
+            'created' => $this->createdCount,
+            'updated' => $this->updatedCount,
+            'imported' => $this->createdCount + $this->updatedCount,
+            'skipped_incomplete' => $this->skippedIncompleteCount,
+            'skipped_example' => $this->skippedExampleCount,
+            'created_classes' => array_keys($this->createdClasses),
+        ];
+    }
+
+    private function normalizeCell(mixed $value): string
+    {
+        return trim(preg_replace('/\s+/u', ' ', (string) $value) ?? '');
+    }
+
+    private function isExampleRow(string $nama, string $nis, string $kelas): bool
+    {
+        return Str::startsWith(Str::lower($nama), 'contoh:');
+    }
+
+    private function extractLevel(string $kelas): ?string
+    {
+        $parts = preg_split('/[\s-]+/', $kelas);
+        $level = $parts[0] ?? null;
+
+        return $level !== '' ? Str::upper($level) : null;
     }
 }

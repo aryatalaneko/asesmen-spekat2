@@ -69,7 +69,7 @@
         {{-- Kiri: Judul & Deskripsi --}}
         <div>
             <h3 style="font-weight:800;font-size:1rem;margin:0 0 0.35rem;">📥 Import Siswa via Excel (Bulk)</h3>
-            <p style="opacity:0.75;font-size:0.82rem;margin:0;max-width:480px;">Upload file Excel berformat <strong>xlsx/xls/csv</strong> dengan kolom: <code style="background:rgba(255,255,255,0.15);padding:0.1rem 0.4rem;border-radius:4px;">Nama</code>, <code style="background:rgba(255,255,255,0.15);padding:0.1rem 0.4rem;border-radius:4px;">NIS</code>, <code style="background:rgba(255,255,255,0.15);padding:0.1rem 0.4rem;border-radius:4px;">Kelas</code>. NIS akan otomatis menjadi password siswa.</p>
+            <p style="opacity:0.75;font-size:0.82rem;margin:0;max-width:480px;">Upload file Excel berformat <strong>xlsx/xls/csv</strong> dengan kolom: <code style="background:rgba(255,255,255,0.15);padding:0.1rem 0.4rem;border-radius:4px;">Nama</code>, <code style="background:rgba(255,255,255,0.15);padding:0.1rem 0.4rem;border-radius:4px;">NIS</code>, <code style="background:rgba(255,255,255,0.15);padding:0.1rem 0.4rem;border-radius:4px;">Kelas</code>. Username ujian dan password siswa akan dibuat otomatis oleh sistem.</p>
         </div>
         {{-- Kanan: Download Template --}}
         <a href="{{ route('admin.users.template') }}"
@@ -266,8 +266,11 @@
                     <input type="text" name="name" class="form-control" placeholder="Nama pengguna..." required>
                 </div>
                 <div class="input-group">
-                    <label class="input-label">Password</label>
-                    <input type="password" name="password" class="form-control" placeholder="Min. 6 karakter" required>
+                    <label class="input-label" id="passwordLabel">Password (Khusus Guru)</label>
+                    <input type="password" name="password" id="passwordInput" class="form-control" placeholder="Min. 6 karakter">
+                    <p id="passwordHint" style="font-size:0.78rem;color:#6b7280;margin-top:0.4rem;">
+                        Untuk siswa, password ujian akan digenerate otomatis oleh sistem.
+                    </p>
                 </div>
                 <div class="input-group">
                     <label class="input-label">Peran</label>
@@ -281,13 +284,20 @@
             {{-- Kolom Tengah/Kanan dinamis --}}
             <div id="dynamicFieldsSiswa" style="display:none;grid-column: span 2;">
                 <div class="input-group">
+                    <label class="input-label">NIS Siswa</label>
+                    <input type="text" name="nis" id="nisInput" class="form-control" placeholder="Masukkan NIS siswa">
+                </div>
+                <div class="input-group">
                     <label class="input-label">Pilih Kelas (Khusus Siswa)</label>
-                    <select name="class_id" class="form-control">
+                    <select name="class_id" id="classIdInput" class="form-control">
                         <option value="">-- Pilih Kelas --</option>
                         @foreach($classes as $c)
                             <option value="{{ $c->id }}">{{ $c->name }}</option>
                         @endforeach
                     </select>
+                </div>
+                <div style="font-size:0.8rem;color:#475569;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:0.75rem 0.9rem;">
+                    Username ujian akan dibentuk dari periode ujian dan 4 digit terakhir NIS. Password login siswa akan digenerate otomatis dan ditampilkan pada kartu peserta.
                 </div>
             </div>
 
@@ -378,6 +388,29 @@ function addMappingRow() {
 function toggleRoleFields(role) {
     document.getElementById('dynamicFieldsSiswa').style.display = role === 'siswa' ? 'block' : 'none';
     document.getElementById('dynamicFieldsGuru').style.display = role === 'guru' ? 'block' : 'none';
+
+    const passwordInput = document.getElementById('passwordInput');
+    const passwordLabel = document.getElementById('passwordLabel');
+    const passwordHint = document.getElementById('passwordHint');
+    const nisInput = document.getElementById('nisInput');
+    const classIdInput = document.getElementById('classIdInput');
+
+    if (role === 'guru') {
+        passwordInput.required = true;
+        passwordLabel.textContent = 'Password (Khusus Guru)';
+        passwordInput.placeholder = 'Min. 6 karakter';
+        passwordHint.textContent = 'Password guru ditentukan manual oleh admin.';
+        nisInput.required = false;
+        classIdInput.required = false;
+    } else {
+        passwordInput.required = false;
+        passwordInput.value = '';
+        passwordLabel.textContent = 'Password (Otomatis untuk Siswa)';
+        passwordInput.placeholder = 'Akan dibuat otomatis';
+        passwordHint.textContent = 'Sistem akan membuat password login siswa secara otomatis saat akun disimpan.';
+        nisInput.required = true;
+        classIdInput.required = true;
+    }
 }
 toggleRoleFields('guru');
 

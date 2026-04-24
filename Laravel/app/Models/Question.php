@@ -11,6 +11,10 @@ class Question extends Model
         'question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'option_e', 'correct_option',
     ];
 
+    protected $casts = [
+        'weight' => 'float',
+    ];
+
     public function subject()
     {
         return $this->belongsTo(Subject::class);

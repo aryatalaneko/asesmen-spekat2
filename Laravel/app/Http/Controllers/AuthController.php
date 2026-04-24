@@ -36,16 +36,19 @@ class AuthController extends Controller
             'name'     => ['required', 'string'],
             'password' => ['required'],
         ], [
-            'name.required'     => 'Nama pengguna wajib diisi.',
+            'name.required'     => 'Username atau nama pengguna wajib diisi.',
             'password.required' => 'Password wajib diisi.',
         ]);
 
-        // Cari user berdasarkan nama
-        $user = User::where('name', $request->name)->first();
+        $loginIdentifier = trim((string) $request->name);
+
+        // Siswa login menggunakan username ujian, admin/guru tetap bisa login dengan nama.
+        $user = User::where('exam_username', $loginIdentifier)->first()
+            ?? User::where('name', $loginIdentifier)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return back()->withErrors([
-                'name' => 'Nama atau password yang Anda masukkan salah.',
+                'name' => 'Username/nama pengguna atau password yang Anda masukkan salah.',
             ])->onlyInput('name');
         }
 

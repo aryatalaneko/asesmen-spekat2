@@ -25,7 +25,7 @@
         <div class="bg-white rounded-[28px] shadow-xl shadow-blue-900/10 border border-slate-100 p-8">
 
             <h2 class="text-lg font-bold text-blue-900 mb-1">Masuk ke Akun Anda</h2>
-            <p class="text-sm text-slate-400 mb-7">Masukkan nama dan password yang diberikan oleh Admin.</p>
+            <p class="text-sm text-slate-400 mb-7">Siswa login memakai username pada kartu ujian. Admin dan guru tetap bisa login memakai nama.</p>
 
             {{-- Error Alert --}}
             @if ($errors->any())
@@ -46,7 +46,7 @@
 
                 {{-- Name Field --}}
                 <div>
-                    <label for="name" class="block text-sm font-semibold text-blue-900 mb-2">Nama Pengguna</label>
+                    <label for="name" class="block text-sm font-semibold text-blue-900 mb-2">Username atau Nama Pengguna</label>
                     <div class="relative">
                         <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                             <svg class="w-4.5 h-4.5 text-slate-400 w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -60,8 +60,8 @@
                             value="{{ old('name') }}"
                             required
                             autofocus
-                            autocomplete="name"
-                            placeholder="Masukkan nama Anda..."
+                            autocomplete="username"
+                            placeholder="Masukkan username ujian atau nama..."
                             class="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-blue-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
                         >
                     </div>
@@ -83,8 +83,21 @@
                             required
                             autocomplete="current-password"
                             placeholder="Masukkan password..."
-                            class="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-blue-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
+                            class="w-full pl-11 pr-12 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-blue-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all"
                         >
+                        <button
+                            type="button"
+                            id="togglePassword"
+                            aria-label="Lihat password"
+                            aria-pressed="false"
+                            style="position:absolute;inset-block:0;right:0;padding:0 1rem;display:flex;align-items:center;color:#64748b;">
+                            <svg id="eyeOpenIcon" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>
+                            </svg>
+                            <svg id="eyeClosedIcon" class="w-[18px] h-[18px] hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C5 20 1 12 1 12a21.77 21.77 0 0 1 5.06-6.94"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.22 4.43"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
+                            </svg>
+                        </button>
                     </div>
                 </div>
 
@@ -106,5 +119,28 @@
         </p>
     </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const passwordInput = document.getElementById('password');
+            const toggleButton = document.getElementById('togglePassword');
+            const eyeOpenIcon = document.getElementById('eyeOpenIcon');
+            const eyeClosedIcon = document.getElementById('eyeClosedIcon');
+
+            if (!passwordInput || !toggleButton) {
+                return;
+            }
+
+            toggleButton.addEventListener('click', function () {
+                const showing = passwordInput.type === 'text';
+
+                passwordInput.type = showing ? 'password' : 'text';
+                toggleButton.setAttribute('aria-label', showing ? 'Lihat password' : 'Sembunyikan password');
+                toggleButton.setAttribute('aria-pressed', showing ? 'false' : 'true');
+
+                eyeOpenIcon.classList.toggle('hidden', !showing);
+                eyeClosedIcon.classList.toggle('hidden', showing);
+            });
+        });
+    </script>
 </body>
 </html>

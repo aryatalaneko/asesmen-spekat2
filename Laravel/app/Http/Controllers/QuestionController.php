@@ -63,7 +63,18 @@ class QuestionController extends Controller
             ->where('class_id', '!=', $classId)
             ->values();
 
-        return view('guru.questions', compact('questions', 'currentMap', 'subjectId', 'classId', 'otherClasses'), [
+        $editQuestion = null;
+        if ($request->filled('edit')) {
+            $editQuestion = $questions->firstWhere('id', (int) $request->query('edit'));
+
+            if (!$editQuestion) {
+                return redirect()
+                    ->route('guru.questions.index', ['class_id' => $classId, 'subject_id' => $subjectId])
+                    ->with('error', 'Soal yang ingin diedit tidak ditemukan pada konteks kelas/mapel ini.');
+            }
+        }
+
+        return view('guru.questions', compact('questions', 'currentMap', 'subjectId', 'classId', 'otherClasses', 'editQuestion'), [
             'title' => 'Bank Soal'
         ]);
 
@@ -71,44 +82,52 @@ class QuestionController extends Controller
 
     public function store(Request $request)
     {
-        $rules = [
-            'subject_id'    => 'required|exists:subjects,id',
-            'class_id'      => 'nullable|exists:classes,id',
-            'type'          => 'required|in:pg,essay',
-            'weight'        => 'required|numeric|min:1|max:100',
-            'question_text' => 'required|string',
-        ];
-
-        if ($request->type === 'pg') {
-            $rules['option_a']       = 'required|string';
-            $rules['option_b']       = 'required|string';
-            $rules['option_c']       = 'required|string';
-            $rules['option_d']       = 'required|string';
-            $rules['option_e']       = 'nullable|string';  // Opsi E opsional (SMA)
-            $rules['correct_option'] = 'required|in:a,b,c,d,e'; // Diperluas ke E
-        } else {
-            $rules['essay_key'] = 'required|string';
-        }
-
-        $request->validate($rules);
+        $validated = $this->validateQuestion($request);
 
         Question::create([
-            'subject_id'     => $request->subject_id,
-            'class_id'       => $request->class_id,
+            'subject_id'     => $validated['subject_id'],
+            'class_id'       => $validated['class_id'],
             'user_id'        => Auth::id(),
-            'type'           => $request->type,
-            'weight'         => $request->weight,
-            'question_text'  => $request->question_text,
-            'option_a'       => $request->option_a,
-            'option_b'       => $request->option_b,
-            'option_c'       => $request->option_c,
-            'option_d'       => $request->option_d,
-            'option_e'       => $request->option_e ?: null, // null jika kosong
-            'correct_option' => $request->correct_option,
-            'essay_key'      => $request->essay_key,
+            'type'           => $validated['type'],
+            'weight'         => $this->normalizeWeight($validated['weight']),
+            'question_text'  => $validated['question_text'],
+            'option_a'       => $validated['option_a'] ?? null,
+            'option_b'       => $validated['option_b'] ?? null,
+            'option_c'       => $validated['option_c'] ?? null,
+            'option_d'       => $validated['option_d'] ?? null,
+            'option_e'       => $validated['option_e'] ?: null,
+            'correct_option' => $validated['correct_option'] ?? null,
+            'essay_key'      => $validated['essay_key'] ?? null,
         ]);
 
         return back()->with('success', 'Soal berhasil ditambahkan ke bank soal.');
+    }
+
+    public function update(Request $request, Question $question)
+    {
+        $validated = $this->validateQuestion($request);
+
+        $question->update([
+            'subject_id'     => $validated['subject_id'],
+            'class_id'       => $validated['class_id'],
+            'type'           => $validated['type'],
+            'weight'         => $this->normalizeWeight($validated['weight']),
+            'question_text'  => $validated['question_text'],
+            'option_a'       => $validated['option_a'] ?? null,
+            'option_b'       => $validated['option_b'] ?? null,
+            'option_c'       => $validated['option_c'] ?? null,
+            'option_d'       => $validated['option_d'] ?? null,
+            'option_e'       => $validated['option_e'] ?: null,
+            'correct_option' => $validated['correct_option'] ?? null,
+            'essay_key'      => $validated['essay_key'] ?? null,
+        ]);
+
+        return redirect()
+            ->route('guru.questions.index', [
+                'class_id' => $validated['class_id'],
+                'subject_id' => $validated['subject_id'],
+            ])
+            ->with('success', 'Soal berhasil diperbarui.');
     }
 
     public function destroy(Question $question)
@@ -251,5 +270,34 @@ class QuestionController extends Controller
         }
 
         return back()->with('success', $msg);
+    }
+
+    private function validateQuestion(Request $request): array
+    {
+        $rules = [
+            'subject_id'    => 'required|exists:subjects,id',
+            'class_id'      => 'nullable|exists:classes,id',
+            'type'          => 'required|in:pg,essay',
+            'weight'        => 'required|numeric|min:0.1|max:100',
+            'question_text' => 'required|string',
+        ];
+
+        if ($request->type === 'pg') {
+            $rules['option_a']       = 'required|string';
+            $rules['option_b']       = 'required|string';
+            $rules['option_c']       = 'required|string';
+            $rules['option_d']       = 'required|string';
+            $rules['option_e']       = 'nullable|string';
+            $rules['correct_option'] = 'required|in:a,b,c,d,e';
+        } else {
+            $rules['essay_key'] = 'required|string';
+        }
+
+        return $request->validate($rules);
+    }
+
+    private function normalizeWeight(mixed $weight): float
+    {
+        return (float) str_replace(',', '.', (string) $weight);
     }
 }

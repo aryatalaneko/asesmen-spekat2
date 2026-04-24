@@ -73,6 +73,7 @@ Route::middleware('auth')->group(function () {
     // ==============================
     Route::get('/guru/questions',               [QuestionController::class, 'index'])->name('guru.questions.index');
     Route::post('/guru/questions',              [QuestionController::class, 'store'])->name('guru.questions.store');
+    Route::put('/guru/questions/{question}',    [QuestionController::class, 'update'])->name('guru.questions.update');
     Route::post('/guru/questions/bulk-delete',  [QuestionController::class, 'bulkDelete'])->name('guru.questions.bulk-delete');
     Route::delete('/guru/questions/{question}', [QuestionController::class, 'destroy'])->name('guru.questions.destroy');
     Route::post('/guru/questions/import',       [QuestionController::class, 'importQuestions'])->name('guru.questions.import');
@@ -104,6 +105,7 @@ Route::middleware('auth')->group(function () {
     // ==============================
     Route::get('/siswa/exams',              [ExamController::class, 'index'])->name('siswa.exams.index');
     Route::get('/siswa/exams/{id}/take',    [ExamController::class, 'take'])->name('siswa.exams.take');
+    Route::post('/api/siswa/exams/{id}/status', [ExamController::class, 'updateRealtimeStatus'])->name('siswa.exams.status');
     Route::post('/siswa/exams/{id}/submit', [ExamController::class, 'submit'])->name('siswa.exams.submit');
 
     Route::get('/siswa/results',          [ResultController::class, 'index'])->name('siswa.results.index');
